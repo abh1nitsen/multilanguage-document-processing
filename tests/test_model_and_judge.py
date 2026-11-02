@@ -1,0 +1,72 @@
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from hindi_records.extract import LABELS
+from hindi_records.judge import validate_report
+from hindi_records.languages import language_config
+from hindi_records.model import validate_model_output
+from hindi_records.store import Store
+
+
+class ModelTests(unittest.TestCase):
+    def test_evidence_not_found_is_withheld(self):
+        fields = {k: [] for k in LABELS}
+        fields["issuer"] = [{"raw": "Invented issuer", "page": 1}]
+        fields["subject"] = [{"raw": "बैठक", "page": 1}]
+        raw = {"is_circular": True, "reason": "Notice", "fields": fields}
+        result = validate_model_output(raw, ["विषय: बैठक"], "fake")
+        self.assertIsNone(result["fields"]["issuer"]["value"])
+        self.assertFalse(result["admitted"])
+        self.assertTrue(result["fields"]["issuer"]["issues"])
+
+    def test_wrong_types_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_model_output({"is_circular": "true", "reason": "", "fields": {}}, [], "fake")
+
+    def test_all_mandatory_languages_configured(self):
+        self.assertEqual([language_config(k)["ocr"] for k in ["hi", "kn", "ur", "ar"]], ["hin", "kan", "urd", "ara"])
+        self.assertEqual(language_config("ur")["direction"], "rtl")
+
+    def test_judge_cannot_confirm_and_is_cached(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Store(Path(tmp) / "test.sqlite")
+            try:
+                sample = Path(__file__).resolve().parents[1] / "examples/school.txt"
+                doc = store.ingest(sample)["document"]
+                report = {k: {"verdict": "supported", "reason": "Supported by source"} for k in LABELS}
+                with patch("hindi_records.judge.assess", return_value=report) as fake:
+                    first = store.judge(doc["id"], "fake-judge")
+                    second = store.judge(doc["id"], "fake-judge")
+                    self.assertEqual(fake.call_count, 1)
+                self.assertFalse(first["cache_hit"])
+                self.assertTrue(second["cache_hit"])
+                self.assertEqual(store.get(doc["id"])["state"], "needs_review")
+                self.assertEqual(store.conn.execute("SELECT COUNT(*) FROM notices").fetchone()[0], 0)
+            finally:
+                store.close()
+
+    def test_invalid_judge_verdict_rejected(self):
+        report = {k: {"verdict": "auto_approve", "reason": "Trust me"} for k in LABELS}
+        with self.assertRaises(ValueError):
+            validate_report(report)
+
+    def test_model_failure_reuses_reading_checkpoint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Store(Path(tmp) / "test.sqlite")
+            try:
+                sample = Path(__file__).resolve().parents[1] / "examples/school.txt"
+                with patch("hindi_records.store.request_extraction", side_effect=ValueError("Service down")):
+                    doc = store.ingest(sample, provider="groq")["document"]
+                self.assertEqual(doc["state"], "failed")
+                self.assertIsNotNone(doc["pages"])
+                with patch("hindi_records.store.read_source", side_effect=AssertionError("Do not repeat reading")), patch(
+                        "hindi_records.store.request_extraction", side_effect=ValueError("Still down")):
+                    self.assertEqual(store.process(doc["id"])["state"], "failed")
+            finally:
+                store.close()
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,7 @@
+{
+  "name": "hindi-records-ocr",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local Hindi and English OCR worker for Hindi Records",
+  "dependencies": { "tesseract.js": "^7.0.0" }
+}

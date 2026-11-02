@@ -1,0 +1,15 @@
+{
+  "purpose": "Development sources, not a held-out benchmark. Download source documents locally; do not assume redistribution rights.",
+  "sources": [
+    {
+      "id": "cbse-cwsn-2021-10-07",
+      "language": "hi",
+      "domain": "education-administration",
+      "issuer": "CBSE",
+      "url": "https://www.cbse.gov.in/cbsenew/documents/Clarification_reg_CWSN_HINDI.pdf",
+      "split": "development",
+      "annotation_status": "Visually inspected development example; independent human annotation pending",
+      "observed_failure_slices": ["OCR digit errors", "PDF glyph mapping", "cited versus issue dates", "advisory judge shared reading errors"]
+    }
+  ]
+}

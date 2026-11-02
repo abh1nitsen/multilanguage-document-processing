@@ -1,0 +1,9 @@
+Circular Ledger uses Tesseract.js and Tesseract language data for optional local OCR.
+See their upstream repositories and installed package licenses.
+
+The optional romanization feature uses the universal romanizer software 'uroman'
+written by Ulf Hermjakob, USC Information Sciences Institute (2015-2020).
+See https://github.com/isi-nlp/uroman/blob/master/LICENSE.txt for its license.
+
+Public circulars are fetched from their original publishers into ignored local
+data directories. They are not redistributed as part of this repository.

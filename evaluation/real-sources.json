@@ -9,7 +9,32 @@
       "url": "https://www.cbse.gov.in/cbsenew/documents/Clarification_reg_CWSN_HINDI.pdf",
       "split": "development",
       "annotation_status": "Visually inspected development example; independent human annotation pending",
-      "observed_failure_slices": ["OCR digit errors", "PDF glyph mapping", "cited versus issue dates", "advisory judge shared reading errors"]
+      "observed_failure_slices": [
+        "OCR digit errors",
+        "PDF glyph mapping",
+        "cited versus issue dates",
+        "advisory judge shared reading errors"
+      ]
+    },
+    {
+      "id": "vtu-kannada-textbooks-2025-10-15",
+      "language": "kn",
+      "domain": "university-administration",
+      "issuer": "Visvesvaraya Technological University",
+      "landing_page": "https://vtu.ac.in/en/2025/10/38032/",
+      "url": "https://vtu.ac.in/wp-content/uploads/2025/10/%E0%B2%B8%E0%B3%81%E0%B2%A4%E0%B3%8D%E0%B2%A4%E0%B3%8B%E0%B2%B2%E0%B3%86-%E0%B2%B5%E0%B2%BF%E0%B2%A4%E0%B2%BE%E0%B2%B5%E0%B2%BF%E0%B2%AF%E0%B2%BF%E0%B2%82%E0%B2%A6-%E0%B2%AA%E0%B3%8D%E0%B2%B0%E0%B2%95%E0%B2%9F%E0%B2%97%E0%B3%8A%E0%B2%82%E0%B2%A1%E0%B2%BF%E0%B2%B0%E0%B3%81%E0%B2%B5-%E0%B2%AC%E0%B2%B3%E0%B2%95%E0%B3%86-%E0%B2%95%E0%B2%A8%E0%B3%8D%E0%B2%A8%E0%B2%A1-%E0%B2%AE%E0%B2%A4%E0%B3%8D%E0%B2%A4%E0%B3%81-%E0%B2%B8%E0%B2%BE%E0%B2%82%E0%B2%B8%E0%B3%8D%E0%B2%95%E0%B3%83%E0%B2%A4%E0%B2%BF%E0%B2%95-%E0%B2%95%E0%B2%A8%E0%B3%8D%E0%B2%A8%E0%B2%A1-%E0%B2%AA%E0%B2%A0%E0%B3%8D%E0%B2%AF%E0%B2%AA%E0%B3%81%E0%B2%B8%E0%B3%8D%E0%B2%A4%E0%B2%95%E0%B2%97%E0%B2%B3%E0%B2%A8%E0%B3%8D%E0%B2%A8%E0%B3%81-%E0%B2%96%E0%B2%B0%E0%B3%80%E0%B2%A6.pdf",
+      "sha256": "304c5cf0d6b9755daa3773dc2978e652ff3b6a8f3799d1c7ede1303e548475d3",
+      "local_filename": "vtu-kannada-textbooks-2025.pdf",
+      "split": "development",
+      "annotation_status": "Original page visually inspected; native Kannada annotation and bilingual review pending",
+      "observed_failure_slices": [
+        "Scanned page with handwritten reference and stamped date",
+        "Wrapped subject quote needed whitespace-only grounding",
+        "Unreadable OCR issue date withheld",
+        "Bilingual issuer candidates require review",
+        "Cited reference confused with current reference",
+        "Location role and translated academic titles need semantic review"
+      ]
     }
   ]
 }

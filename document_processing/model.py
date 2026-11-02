@@ -8,6 +8,7 @@ import urllib.request
 
 from .extract import LABELS, REQUIRED, validate_value
 from .languages import language_config
+from .validation import locate_quote
 
 PROMPT_VERSION = "circular-evidence-v2-dual-reading"
 DEFAULT_MODEL = "openai/gpt-oss-120b"
@@ -110,13 +111,15 @@ def validate_model_output(raw, pages, model, alternate_pages=None):
             if reading not in {"primary", "text_layer"}:
                 raise ValueError("Unknown evidence reading.")
             source_pages = pages if reading == "primary" else (alternate_pages or [])
-            if not text.strip() or len(text) > 2000 or not 1 <= page <= len(source_pages) or text not in source_pages[page - 1]:
+            span = locate_quote(text, source_pages[page - 1]) if text.strip() and len(text) <= 2000 and 1 <= page <= len(source_pages) else None
+            if span is None:
                 issues.append("Proposed evidence does not match the source; value withheld.")
                 continue
-            start = source_pages[page - 1].index(text)
+            start, end = span
+            text = source_pages[page - 1][start:end]
             accepted.append({"raw": text, "evidence": {"page": page,
                 "reading": reading, "line": source_pages[page - 1][:start].count("\n") + 1,
-                "start": start, "end": start + len(text), "quote": text}})
+                "start": start, "end": end, "quote": text}})
         value = None
         if len(accepted) == 1 and not issues:
             try:
@@ -131,6 +134,6 @@ def validate_model_output(raw, pages, model, alternate_pages=None):
     # Model admission alone cannot create a business record; require grounded core evidence.
     admitted = raw["is_circular"] and bool(fields["subject"]["candidates"]) and any(
         fields[k]["candidates"] for k in ["issuer", "issued_date", "required_action"])
-    return {"extractor_version": PROMPT_VERSION, "model": model, "admitted": admitted,
+    return {"extractor_version": PROMPT_VERSION, "validation_version": "evidence-whitespace-v1", "model": model, "admitted": admitted,
             "rejection_reasons": [] if admitted else [raw["reason"] or "Insufficient grounded circular fields."],
             "fields": fields, "model_output": raw}

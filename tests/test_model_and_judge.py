@@ -11,6 +11,25 @@ from document_processing.store import Store
 
 
 class ModelTests(unittest.TestCase):
+    def test_whitespace_only_quote_differences_keep_exact_source_offsets(self):
+        source = "ಸಂಸ್ಥೆ\nವಿಷಯ: ಕನ್ನಡ ಪಠ್ಯಪುಸ್ತಕಗಳನ್ನು\n2025-26ನೇ ಸಾಲಿಗೆ ಖರೀದಿಸುವ ಬಗ್ಗೆ."
+        fields = {key: [] for key in LABELS}
+        fields["issuer"] = [{"raw": "ಸಂಸ್ಥೆ", "page": 1}]
+        fields["subject"] = [{"raw": "ಕನ್ನಡ ಪಠ್ಯಪುಸ್ತಕಗಳನ್ನು 2025-26ನೇ ಸಾಲಿಗೆ ಖರೀದಿಸುವ ಬಗ್ಗೆ.", "page": 1}]
+        result = validate_model_output({"is_circular": True, "reason": "Circular", "fields": fields}, [source], "fake")
+        self.assertTrue(result["admitted"])
+        candidate = result["fields"]["subject"]["candidates"][0]
+        evidence = candidate["evidence"]
+        self.assertEqual(source[evidence["start"]:evidence["end"]], evidence["quote"])
+        self.assertIn("\n", evidence["quote"])
+        self.assertFalse(result["fields"]["subject"]["issues"])
+
+    def test_whitespace_tolerance_does_not_accept_changed_words(self):
+        fields = {key: [] for key in LABELS}
+        fields["subject"] = [{"raw": "ಪಠ್ಯ ಪುಸ್ತಕ", "page": 1}]
+        result = validate_model_output({"is_circular": True, "reason": "", "fields": fields}, ["ಪಠ್ಯ\nಪತ್ರ"], "fake")
+        self.assertIsNone(result["fields"]["subject"]["value"])
+
     def test_evidence_not_found_is_withheld(self):
         fields = {k: [] for k in LABELS}
         fields["issuer"] = [{"raw": "Invented issuer", "page": 1}]

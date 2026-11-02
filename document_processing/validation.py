@@ -3,6 +3,18 @@ import re
 import unicodedata
 
 
+def locate_quote(quote, source):
+    """Find verbatim text with whitespace-only tolerance; never repair spelling."""
+    start = source.find(quote)
+    if start >= 0:
+        return start, start + len(quote)
+    words = quote.split()
+    if not words:
+        return None
+    match = re.search(r"\s+".join(re.escape(word) for word in words), source)
+    return match.span() if match else None
+
+
 def comparable(text):
     normalized = unicodedata.normalize("NFC", text)
     return re.sub(r"\s+", "", normalized)

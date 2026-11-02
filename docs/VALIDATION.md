@@ -6,7 +6,7 @@ Development environment: Windows, Python 3.12.10, Node 24.22.1. Initial developm
 
 The initial labelled baseline passed eight hand-authored text cases: school, municipal, scholarship, missing/invalid dates, duplicate labels, irrelevant prose, unsupported free-form notice and adversarial instructions. Initial results: 8/8 admission decisions, 26/26 non-null gold fields, 14/14 nulls and 29/29 evidence offsets. These small synthetic checks measure regression behavior only. A realistic free-form notice is deliberately rejected by the labelled baseline; this illustrates its limited coverage.
 
-The software suite passed 34 tests, including actual Streamlit source-confirmation, English-review and full-text translation interactions, translation-button feedback and saved-result reuse without another provider call, exact source-section coverage, full-text restart/retry checkpoints, independent document ownership with shared translation caches, persistence, byte duplicates, correction history, stale edits, invalid dates, chronology, unsupported/empty inputs, OCR failure and retry, interrupted-job recovery, failed exports, model schema violations, ungrounded evidence, language configuration, judge caching/authority boundaries, and experimental reviewed-English export invariants.
+The software suite passed 36 tests, including actual Streamlit source-confirmation, English-review and full-text translation interactions, translation-button feedback and saved-result reuse without another provider call, exact source-section coverage, whitespace-only evidence matching with original offsets, rejection of changed words, full-text restart/retry checkpoints, independent document ownership with shared translation caches, persistence, byte duplicates, correction history, stale edits, invalid dates, chronology, unsupported/empty inputs, OCR failure and retry, interrupted-job recovery, failed exports, model schema violations, ungrounded evidence, language configuration, judge caching/authority boundaries, and experimental reviewed-English export invariants.
 
 ## Actual circular development check
 
@@ -26,6 +26,17 @@ The current English translator (`openai/gpt-oss-120b`) produced English issuer, 
 After a visual bilingual development review, one English rendering was confirmed with an explicit ASCII reference rendering. The English-only JSON contained one record and only ASCII characters; the original Hindi issuer and 2021-10-07 date remained intact. This validates the translation/review/storage integration, not production translation quality.
 
 A separate full-document translation call completed for the actual one-page circular, covering its heading, introductory paragraphs, numbered clauses, signature and web-admin recipient. It retained warnings for corrupted OCR dates, years and text. The saved output is explicitly unreviewed; it does not inherit the structured record's reviewed date or approval. TXT download was exercised in the running demo. The source text is kept beside the English page, and the full translation remains excluded from confirmed business exports.
+
+## Actual Kannada scanned development check
+
+Official source: VTU circular about purchasing Kannada textbooks for the 2025-26 academic year, published 15 October 2025:
+https://vtu.ac.in/en/2025/10/38032/
+
+The linked original PDF was fetched from vtu.ac.in: one scanned page, 342,560 bytes, SHA-256 `304c5cf0d6b9755daa3773dc2978e652ff3b6a8f3799d1c7ede1303e548475d3`. It has no extractable text layer. Local PDF rasterization and Tesseract Kannada+English OCR completed; the engine reported recognition score 86, which is not field accuracy or a calibrated correctness probability.
+
+The first extraction was rejected because the model quoted a line-wrapped subject as a single line. Grounding now tolerates whitespace-only differences, computes offsets against the actual source slice, and retains the original model response. Revalidation reused the saved OCR/model output rather than repeating calls. The subject became supported and the document entered `needs_review`.
+
+Remaining weaknesses are explicit: the stamped issue date is garbled by OCR and stays unknown; two bilingual issuer candidates require review; a cited older reference and letterhead location were proposed in incorrect or questionable roles; a changed-word action quotation was withheld. The full English translation completed and was saved as unreviewed, retaining warnings for garbled identifiers, dates, contact information and numerals. Academic titles, book names and instruction meaning still require native Kannada review. No business record was confirmed and no production-quality claim is made from this development sample.
 
 ## Current verification boundaries
 

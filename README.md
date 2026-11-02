@@ -95,6 +95,8 @@ python tools/evaluate.py
 
 See [validation results](docs/VALIDATION.md), [architecture and guarantees](docs/ARCHITECTURE.md), and [the fixed capability and release gates](docs/CHARTER.md). Eight synthetic text cases are regression checks only. Real-document qualification uses actual circulars and separately prepared annotations; the development sample is not a held-out benchmark.
 
+An actual scanned Kannada development example is the [VTU Kannada-textbook purchasing circular](https://vtu.ac.in/en/2025/10/38032/). Its official attachment URL and checksum are recorded in `evaluation/real-sources.json`. Download the publisher's PDF locally and choose Kannada + Groq; automatic OCR uses the Kannada model. The initial run exposed OCR, evidence-wrapping and semantic-role failures, documented in the validation report. It remains a review case, not proof of Kannada accuracy. Original PDFs and generated translations stay in ignored local storage.
+
 ## Limitations
 
 This milestone is a local, single-operator demo. It has no application login, distributed worker, scheduled monitoring, production service isolation, calibrated confidence, autonomous approval, or remote database connector. It uses one circular per file and a bounded common field schema; multiple events, attachments, arbitrary target schemas, handwriting, and very long circulars need further work. Groq extraction/judging limits combined readings to 24,000 characters. OCR grounding proves agreement with a reading, not correctness against the original pixels. Human visual review remains necessary.

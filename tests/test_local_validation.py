@@ -31,4 +31,3 @@ class LocalChecks(unittest.TestCase):
                 self.assertEqual(doc["effective"]["location"], "विशेष कक्ष")
             finally:
                 store.close()
-

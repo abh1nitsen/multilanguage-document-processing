@@ -184,16 +184,38 @@ try:
                        file_name="confirmed-notices.json", mime="application/json")
     with st.expander("Experimental English translation and export"):
         st.caption("Translate confirmed text into English using an explicit Groq call. Originals remain unchanged. Review meaning and identifier renderings before English-only export.")
+        feedback_key = "translation_feedback_" + selected
+        if feedback_key in st.session_state:
+            st.success(st.session_state.pop(feedback_key))
         translation_model = st.text_input("Translation model", DEFAULT_MODEL)
-        if st.button("Propose English translation", disabled=doc["state"] != "confirmed"):
+        saved_translation = store.english(selected)
+        matching_translation = bool(saved_translation and saved_translation["source_revision"] == doc["revision"]
+                                    and saved_translation["model"] == translation_model)
+        translation_button = "Propose English translation"
+        if matching_translation:
+            translation_button = "Show saved English translation" if saved_translation["state"] == "confirmed" else "Continue English review"
+            st.caption("An English translation is already saved for this document and model. Opening it makes no new AI call.")
+        if doc["state"] != "confirmed":
+            st.caption("Confirm the original-language record before requesting an English translation.")
+        if st.button(translation_button, disabled=doc["state"] != "confirmed"):
             try:
-                with st.spinner("Translating the confirmed record…"):
+                with st.spinner("Opening the saved translation…" if matching_translation else "Translating the confirmed record…"):
                     store.translate(selected, translation_model)
+                if matching_translation:
+                    st.session_state[feedback_key] = "Opened the saved English translation below. No new AI call was made."
+                else:
+                    st.session_state[feedback_key] = "English translation is ready below. Review the English fields before confirming or exporting."
                 st.rerun()
             except ValueError as exc:
                 st.error(str(exc))
         translation = store.english(selected)
         if translation:
+            if translation["source_revision"] == doc["revision"] and translation["state"] == "confirmed":
+                st.subheader("Saved English translation")
+                for field in TEXT_FIELDS:
+                    if translation["effective"].get(field) is not None:
+                        st.markdown("**" + field.replace("_", " ").title() + "**")
+                        st.text(translation["effective"][field])
             english_judge_model = st.text_input("English judge model", DEFAULT_JUDGE_MODEL)
             if st.button("Ask the judge to check English meaning against the original"):
                 try:
@@ -235,7 +257,8 @@ try:
                             st.error(str(exc))
             else:
                 st.success("English rendering reviewed for this source revision.")
-                st.json(translation["effective"])
+                with st.expander("Full saved English record"):
+                    st.json(translation["effective"])
         if st.button("Prepare reviewed English-only export"):
             try:
                 path = Path(db).parent / "exports" / "english-reviewed.json"

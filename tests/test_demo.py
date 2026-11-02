@@ -10,6 +10,29 @@ from document_processing.store import Store
 
 @unittest.skipUnless(importlib.util.find_spec("streamlit"), "optional demo is not installed")
 class DemoTests(unittest.TestCase):
+    def test_translation_button_reports_new_and_saved_results(self):
+        from streamlit.testing.v1 import AppTest
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "translation-button.sqlite"
+            store = Store(db)
+            doc = store.ingest(root / "examples/school.txt")["document"]
+            store.confirm(doc["id"], "source-reviewer", doc["revision"])
+            store.close()
+            english = {"issuer": "Adarsh School, Bhopal", "subject": "Parent meeting", "location": "School auditorium",
+                "required_action": "Parents should attend at 10 am with the progress report."}
+            with patch.dict(os.environ, {"CIRCULAR_DB": str(db)}), patch(
+                    "document_processing.translate.propose", return_value=english) as provider:
+                at = AppTest.from_file(str(root / "app.py")).run(timeout=30)
+                next(w for w in at.button if w.label == "Propose English translation").click().run(timeout=30)
+                self.assertFalse(at.exception)
+                self.assertTrue(any("English translation is ready below" in item.value for item in at.success))
+                self.assertTrue(any(w.label == "English subject" and w.value == "Parent meeting" for w in at.text_area))
+                next(w for w in at.button if w.label == "Continue English review").click().run(timeout=30)
+                self.assertFalse(at.exception)
+                self.assertTrue(any("No new AI call was made" in item.value for item in at.success))
+                self.assertEqual(provider.call_count, 1)
+
     def test_english_review_form_saves_separate_rendering(self):
         from streamlit.testing.v1 import AppTest
         root = Path(__file__).resolve().parents[1]

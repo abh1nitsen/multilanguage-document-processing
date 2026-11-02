@@ -6,7 +6,7 @@ Development environment: Windows, Python 3.12.10, Node 24.22.1. Initial developm
 
 The initial labelled baseline passed eight hand-authored text cases: school, municipal, scholarship, missing/invalid dates, duplicate labels, irrelevant prose, unsupported free-form notice and adversarial instructions. Initial results: 8/8 admission decisions, 26/26 non-null gold fields, 14/14 nulls and 29/29 evidence offsets. These small synthetic checks measure regression behavior only. A realistic free-form notice is deliberately rejected by the labelled baseline; this illustrates its limited coverage.
 
-The software suite passed 26 tests, including actual Streamlit source-confirmation and English-review form interactions, persistence, byte duplicates, restart, correction history, stale edits, invalid dates, chronology, unsupported/empty inputs, OCR failure and retry, interrupted-job recovery, failed exports, model schema violations, ungrounded evidence, language configuration, judge caching/authority boundaries, and experimental reviewed-English export invariants.
+The software suite passed 27 tests, including actual Streamlit source-confirmation and English-review form interactions, translation-button feedback and saved-result reuse without another provider call, persistence, byte duplicates, restart, correction history, stale edits, invalid dates, chronology, unsupported/empty inputs, OCR failure and retry, interrupted-job recovery, failed exports, model schema violations, ungrounded evidence, language configuration, judge caching/authority boundaries, and experimental reviewed-English export invariants.
 
 ## Actual circular development check
 

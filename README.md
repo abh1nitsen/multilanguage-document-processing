@@ -51,6 +51,8 @@ The launcher never copies keys into the repository. `.env.example` is a referenc
 5. Confirm after checking the source. Only confirmed records enter the `notices` table and exports. Reopening removes a record from current confirmed exports while keeping its corrections and review events.
 6. Download original-script JSON. If an English-only target is needed, request an English translation, review it against the original, explicitly decide any ASCII reference rendering, and confirm the English record before exporting. The optional judge can assess English meaning against original source readings; it cannot approve translations.
 
+If a translation already exists for the selected document revision and model, the action reads **Continue English review** or **Show saved English translation**. It reopens the saved result without a new model call and displays a confirmation. Reviewed English fields appear as readable text, with the full JSON record available in an expandable section.
+
 For a completely offline text regression walkthrough, choose Hindi + baseline and upload `examples/school.txt`. These examples are authored synthetic tests, not production evidence.
 
 ## CLI

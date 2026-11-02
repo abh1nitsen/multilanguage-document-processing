@@ -12,7 +12,9 @@ from .ingest import read_source, MAX_BYTES
 from .languages import language_config
 from .model import DEFAULT_MODEL, PROMPT_VERSION, cache_key, request_extraction, validate_model_output
 from . import judge
+from .judge import DEFAULT_JUDGE_MODEL
 from .validation import crosscheck_readings
+from . import translate
 
 
 def dumps(value):
@@ -51,6 +53,16 @@ class Store:
           id INTEGER PRIMARY KEY, document_id TEXT NOT NULL REFERENCES documents(id),
           event TEXT NOT NULL, reviewer TEXT NOT NULL, revision INTEGER NOT NULL,
           values_json TEXT NOT NULL, created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS english_translations (
+          id INTEGER PRIMARY KEY, document_id TEXT NOT NULL REFERENCES documents(id),
+          source_revision INTEGER NOT NULL, model TEXT NOT NULL, version TEXT NOT NULL,
+          proposal_json TEXT NOT NULL, effective_json TEXT NOT NULL,
+          state TEXT NOT NULL CHECK(state IN ('needs_review','confirmed')),
+          revision INTEGER NOT NULL DEFAULT 0, reviewer TEXT, reason TEXT, reviewed_at TEXT);
+        CREATE TABLE IF NOT EXISTS translation_judge_reports (
+          id INTEGER PRIMARY KEY, translation_id INTEGER NOT NULL REFERENCES english_translations(id),
+          translation_revision INTEGER NOT NULL, model TEXT NOT NULL,
+          report_json TEXT NOT NULL, created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS corrections (
           id INTEGER PRIMARY KEY, document_id TEXT NOT NULL REFERENCES documents(id),
           field TEXT NOT NULL, value_json TEXT NOT NULL, reason TEXT NOT NULL,
@@ -237,7 +249,7 @@ class Store:
                 (doc_id, "reopened", "local operator", revision + 1, dumps(snapshot["effective"]), now()))
         return self.get(doc_id)
 
-    def judge(self, doc_id, model=judge.DEFAULT_JUDGE_MODEL):
+    def judge(self, doc_id, model=DEFAULT_JUDGE_MODEL):
         doc = self.get(doc_id)
         if doc["state"] not in {"needs_review", "confirmed"}:
             raise ValueError("Judge requires a readable, admitted circular.")
@@ -264,18 +276,103 @@ class Store:
         return [dict(r) for r in self.conn.execute(
             "SELECT id,source_name,state,revision,submitted_at,error FROM documents ORDER BY submitted_at")]
 
+    def english(self, doc_id):
+        row = self.conn.execute("SELECT * FROM english_translations WHERE document_id=? ORDER BY id DESC LIMIT 1", (doc_id,)).fetchone()
+        if row is None:
+            return None
+        item = dict(row)
+        item["proposal"] = json.loads(item.pop("proposal_json"))
+        item["effective"] = json.loads(item.pop("effective_json"))
+        return item
+
+    def translate(self, doc_id, model=DEFAULT_MODEL):
+        doc = self.get(doc_id)
+        if doc["state"] != "confirmed":
+            raise ValueError("Confirm the original-language record before requesting translation.")
+        prior = self.english(doc_id)
+        if prior and prior["source_revision"] == doc["revision"] and prior["model"] == model:
+            return prior
+        source = dict(self.conn.execute("SELECT * FROM notices WHERE document_id=?", (doc_id,)).fetchone())
+        language = doc["processing_options"]["language"]
+        key = translate.identity(source, language, model)
+        cached = self.conn.execute("SELECT raw_json FROM model_cache WHERE cache_key=?", (key,)).fetchone()
+        raw = translate.validate_proposal(json.loads(cached[0]), source) if cached else translate.propose(source, language, model)
+        effective = dict(source)
+        effective.update(raw)
+        with self.conn:
+            if not cached:
+                self.conn.execute("INSERT OR IGNORE INTO model_cache VALUES (?,?,?)", (key, dumps(raw), now()))
+            self.conn.execute("""INSERT INTO english_translations
+                (document_id,source_revision,model,version,proposal_json,effective_json,state)
+                VALUES (?,?,?,?,?,?,'needs_review')""", (doc_id, doc["revision"], model, translate.VERSION, dumps(raw), dumps(effective)))
+        return self.english(doc_id)
+
+    def confirm_english(self, translation_id, revision, values, reviewer, reason):
+        if not reason.strip():
+            raise ValueError("English review reason is required, including any identifier rendering decision.")
+        row = self.conn.execute("SELECT * FROM english_translations WHERE id=?", (translation_id,)).fetchone()
+        if not row:
+            raise ValueError("Translation not found.")
+        doc = self.get(row["document_id"])
+        if doc["state"] != "confirmed" or doc["revision"] != row["source_revision"]:
+            raise ValueError("Original record changed; request a translation of the current confirmed revision.")
+        source = dict(self.conn.execute("SELECT * FROM notices WHERE document_id=?", (doc["id"],)).fetchone())
+        result = translate.reviewed_values(source, values, reviewer)
+        result["confirmed_at"] = now()
+        with self.conn:
+            # The source and translation revision are checked inside the same write transaction.
+            changed = self.conn.execute("""UPDATE english_translations SET effective_json=?,state='confirmed',
+                revision=revision+1,reviewer=?,reason=?,reviewed_at=?
+                WHERE id=? AND revision=? AND state='needs_review' AND EXISTS
+                (SELECT 1 FROM documents WHERE id=? AND state='confirmed' AND revision=?)""",
+                (dumps(result), reviewer, reason, now(), translation_id, revision, doc["id"], doc["revision"])).rowcount
+            if not changed:
+                raise ValueError("Stale translation or source revision. Reload it.")
+        return self.english(doc["id"])
+
+    def judge_english(self, doc_id, model=DEFAULT_JUDGE_MODEL):
+        doc = self.get(doc_id)
+        translation = self.english(doc_id)
+        if not translation or doc["state"] != "confirmed" or translation["source_revision"] != doc["revision"]:
+            raise ValueError("A current English translation of a confirmed source is required.")
+        language = doc["processing_options"]["language"]
+        alternate = (doc["reader"] or {}).get("alternate_text_pages", [])
+        values = {field: translation["effective"].get(field) for field in LABELS}
+        key = judge.identity(doc["pages"], values, language, model, alternate)
+        cached = self.conn.execute("SELECT raw_json FROM model_cache WHERE cache_key=?", (key,)).fetchone()
+        report = judge.validate_report(json.loads(cached[0])) if cached else judge.assess(doc["pages"], values, language, model, alternate)
+        with self.conn:
+            if not cached:
+                self.conn.execute("INSERT OR IGNORE INTO model_cache VALUES (?,?,?)", (key, dumps(report), now()))
+            self.conn.execute("""INSERT INTO translation_judge_reports
+                (translation_id,translation_revision,model,report_json,created_at) VALUES (?,?,?,?,?)""",
+                (translation["id"], translation["revision"], model, dumps(report), now()))
+        return {"translation_id": translation["id"], "translation_revision": translation["revision"],
+                "advisory_only": True, "report": report}
+
     def export(self, destination, profile="original"):
         destination = Path(destination)
         if destination.resolve() == self.path.resolve():
             raise ValueError("Export destination cannot be the database.")
         records = [dict(r) for r in self.conn.execute("SELECT * FROM notices ORDER BY confirmed_at,document_id")]
         payload = {"schema_version": "1.0", "exported_at": now(), "records": records}
-        if profile == "ascii-experimental":
-            from .romanize import transform_record, transformation_metadata
-            payload["transformation"] = transformation_metadata()
-            payload["records"] = [transform_record(record, self.get(record["document_id"])["processing_options"]["language"]) for record in records]
+        if profile == "english-reviewed":
+            english_records = []
+            for record in records:
+                translation = self.english(record["document_id"])
+                if not translation or translation["state"] != "confirmed" or translation["source_revision"] != record["revision"]:
+                    raise ValueError("Every confirmed source record needs a current reviewed English translation. Export blocked; previous file preserved.")
+                translated = dict(translation["effective"])
+                translated["source_language"] = self.get(record["document_id"])["processing_options"]["language"]
+                translated["source_revision"] = translation["source_revision"]
+                english_records.append(translated)
+            payload["records"] = english_records
+            payload["transformation"] = {"profile": "english-reviewed-experimental", "translation": True,
+                "warning": "Experimental English translation; originals and source identifiers remain in the source database. Review identifier renderings explicitly."}
+            if not dumps(payload).isascii():
+                raise ValueError("English-only export contains unsupported non-ASCII characters.")
         elif profile != "original":
-            raise ValueError("Export profile must be original or ascii-experimental.")
+            raise ValueError("Export profile must be original or english-reviewed.")
         destination.parent.mkdir(parents=True, exist_ok=True)
         temp = None
         try:

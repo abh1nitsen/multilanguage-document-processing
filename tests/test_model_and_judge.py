@@ -3,11 +3,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from hindi_records.extract import LABELS
-from hindi_records.judge import validate_report
-from hindi_records.languages import language_config
-from hindi_records.model import validate_model_output
-from hindi_records.store import Store
+from document_processing.extract import LABELS
+from document_processing.judge import validate_report
+from document_processing.languages import language_config
+from document_processing.model import validate_model_output
+from document_processing.store import Store
 
 
 class ModelTests(unittest.TestCase):
@@ -36,7 +36,7 @@ class ModelTests(unittest.TestCase):
                 sample = Path(__file__).resolve().parents[1] / "examples/school.txt"
                 doc = store.ingest(sample)["document"]
                 report = {k: {"verdict": "supported", "reason": "Supported by source"} for k in LABELS}
-                with patch("hindi_records.judge.assess", return_value=report) as fake:
+                with patch("document_processing.judge.assess", return_value=report) as fake:
                     first = store.judge(doc["id"], "fake-judge")
                     second = store.judge(doc["id"], "fake-judge")
                     self.assertEqual(fake.call_count, 1)
@@ -57,12 +57,12 @@ class ModelTests(unittest.TestCase):
             store = Store(Path(tmp) / "test.sqlite")
             try:
                 sample = Path(__file__).resolve().parents[1] / "examples/school.txt"
-                with patch("hindi_records.store.request_extraction", side_effect=ValueError("Service down")):
+                with patch("document_processing.store.request_extraction", side_effect=ValueError("Service down")):
                     doc = store.ingest(sample, provider="groq")["document"]
                 self.assertEqual(doc["state"], "failed")
                 self.assertIsNotNone(doc["pages"])
-                with patch("hindi_records.store.read_source", side_effect=AssertionError("Do not repeat reading")), patch(
-                        "hindi_records.store.request_extraction", side_effect=ValueError("Still down")):
+                with patch("document_processing.store.read_source", side_effect=AssertionError("Do not repeat reading")), patch(
+                        "document_processing.store.request_extraction", side_effect=ValueError("Still down")):
                     self.assertEqual(store.process(doc["id"])["state"], "failed")
             finally:
                 store.close()

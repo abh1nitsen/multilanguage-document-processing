@@ -6,14 +6,15 @@ from pathlib import Path
 
 import streamlit as st
 
-from hindi_records.extract import LABELS, REQUIRED
-from hindi_records.languages import LANGUAGES
-from hindi_records.model import DEFAULT_MODEL
-from hindi_records.judge import DEFAULT_JUDGE_MODEL
-from hindi_records.store import Store, dumps
+from document_processing.extract import LABELS, REQUIRED
+from document_processing.languages import LANGUAGES
+from document_processing.model import DEFAULT_MODEL
+from document_processing.judge import DEFAULT_JUDGE_MODEL
+from document_processing.translate import TEXT_FIELDS
+from document_processing.store import Store, dumps
 
-st.set_page_config(page_title="Circular Ledger", page_icon="📄", layout="wide")
-st.title("Circular Ledger")
+st.set_page_config(page_title="Multilanguage Document Processing", page_icon="📄", layout="wide")
+st.title("Multilanguage Document Processing")
 st.caption("Read a circular. Check the evidence. Save a trusted record.")
 st.info("Development demo · Hindi validation first · Kannada, Urdu and Arabic configured, not yet quality-qualified")
 db = os.getenv("CIRCULAR_DB", "data/notices.sqlite")
@@ -181,19 +182,71 @@ try:
     confirmed = [dict(r) for r in store.conn.execute("SELECT * FROM notices ORDER BY confirmed_at,document_id")]
     st.download_button("Download confirmed records · JSON", dumps({"schema_version": "1.0", "records": confirmed}),
                        file_name="confirmed-notices.json", mime="application/json")
-    with st.expander("Experimental ASCII / Roman-script export"):
-        st.caption("Local romanization, not English translation. Original records remain unchanged. May lose pronunciation or merge distinct spellings.")
-        if st.button("Prepare experimental Roman-script export"):
+    with st.expander("Experimental English translation and export"):
+        st.caption("Translate confirmed text into English using an explicit Groq call. Originals remain unchanged. Review meaning and identifier renderings before English-only export.")
+        translation_model = st.text_input("Translation model", DEFAULT_MODEL)
+        if st.button("Propose English translation", disabled=doc["state"] != "confirmed"):
             try:
-                path = Path(db).parent / "exports" / "romanized-experimental.json"
-                store.export(path, "ascii-experimental")
-                st.session_state["ascii_export"] = path.read_text(encoding="utf-8")
+                with st.spinner("Translating the confirmed record…"):
+                    store.translate(selected, translation_model)
+                st.rerun()
             except ValueError as exc:
                 st.error(str(exc))
-        if st.session_state.get("ascii_export"):
-            st.caption("Download is the last prepared snapshot. Prepare again after changing confirmed records.")
-            st.download_button("Download experimental ASCII JSON", st.session_state["ascii_export"],
-                               file_name="romanized-experimental.json", mime="application/json")
+        translation = store.english(selected)
+        if translation:
+            english_judge_model = st.text_input("English judge model", DEFAULT_JUDGE_MODEL)
+            if st.button("Ask the judge to check English meaning against the original"):
+                try:
+                    with st.spinner("Reviewing translation faithfulness…"):
+                        report = store.judge_english(selected, english_judge_model)
+                    st.session_state["translation_judge_" + selected] = report
+                except ValueError as exc:
+                    st.error(str(exc))
+            if st.session_state.get("translation_judge_" + selected):
+                report = st.session_state["translation_judge_" + selected]
+                if report["translation_id"] != translation["id"] or report["translation_revision"] != translation["revision"]:
+                    st.warning("English judge report applies to an earlier translation snapshot.")
+                st.json(report)
+            if translation["source_revision"] != doc["revision"]:
+                st.warning("This translation belongs to an earlier source revision. Request a current translation.")
+            elif translation["state"] == "needs_review":
+                with st.form("english_review_" + str(translation["id"])):
+                    st.write("Review the English rendering against the original-language confirmed fields above.")
+                    proposed = {}
+                    for field in TEXT_FIELDS + ["reference_number"]:
+                        source_value = doc["effective"].get(field)
+                        if source_value is None:
+                            proposed[field] = None
+                            st.caption(field + ": absent in source; remains null")
+                        else:
+                            proposed[field] = st.text_area("English " + field.replace("_", " "),
+                                value=translation["effective"].get(field) or "")
+                    st.caption("Dates are preserved locally. Reference identifiers are not machine-translated: any ASCII rendering requires an explicit source-review decision.")
+                    english_reviewer = st.text_input("English reviewer identifier (ASCII)")
+                    english_reason = st.text_input("English review reason, including identifier decisions")
+                    checked_translation = st.checkbox("I checked the English meaning, negation, dates and identifier rendering.")
+                    if st.form_submit_button("Confirm English rendering"):
+                        try:
+                            if not checked_translation:
+                                raise ValueError("Check the English-review acknowledgement first.")
+                            store.confirm_english(translation["id"], translation["revision"], proposed, english_reviewer, english_reason)
+                            st.rerun()
+                        except ValueError as exc:
+                            st.error(str(exc))
+            else:
+                st.success("English rendering reviewed for this source revision.")
+                st.json(translation["effective"])
+        if st.button("Prepare reviewed English-only export"):
+            try:
+                path = Path(db).parent / "exports" / "english-reviewed.json"
+                store.export(path, "english-reviewed")
+                st.session_state["english_export"] = path.read_text(encoding="utf-8")
+            except ValueError as exc:
+                st.error(str(exc))
+        if st.session_state.get("english_export"):
+            st.caption("Last prepared snapshot. Prepare again after changing confirmed records or translations.")
+            st.download_button("Download reviewed English JSON", st.session_state["english_export"],
+                               file_name="english-reviewed.json", mime="application/json")
     with st.expander("Processing and correction history"):
         st.json({"settings": doc["processing_options"], "reader": doc["reader"], "corrections": doc["corrections"], "review_events": doc["review_events"]})
 finally:

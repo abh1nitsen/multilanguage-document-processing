@@ -1,7 +1,7 @@
 """Hand-authored gold values; synthetic regression results, not real-world accuracy."""
 import json
 from pathlib import Path
-from hindi_records.extract import extract
+from document_processing.extract import extract
 
 root = Path(__file__).resolve().parents[1]
 cases = json.loads((root / "evaluation/gold.json").read_text(encoding="utf-8"))

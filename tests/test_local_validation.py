@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from hindi_records.extract import extract, normalize_date
-from hindi_records.store import Store
-from hindi_records.validation import crosscheck_readings
+from document_processing.extract import extract, normalize_date
+from document_processing.store import Store
+from document_processing.validation import crosscheck_readings
 
 
 class LocalChecks(unittest.TestCase):
@@ -32,27 +32,3 @@ class LocalChecks(unittest.TestCase):
             finally:
                 store.close()
 
-    @unittest.skipUnless(importlib.util.find_spec("uroman"), "optional uroman is not installed")
-    def test_romanized_export_is_ascii_and_keeps_original(self):
-        from hindi_records.romanize import romanize_ascii
-        for lang, text in [("hi", "विद्यालय"), ("kn", "ಶಾಲೆ"), ("ur", "مدرسہ"), ("ar", "مدرسة")]:
-            roman = romanize_ascii(text, lang)
-            self.assertTrue(roman.isascii())
-            self.assertTrue(roman.strip())
-            self.assertNotEqual(roman, text)
-        with self.assertRaises(ValueError):
-            romanize_ascii("विद्यालय 🦄", "hi")
-        with tempfile.TemporaryDirectory() as tmp:
-            store = Store(Path(tmp) / "records.sqlite")
-            try:
-                source = Path(__file__).resolve().parents[1] / "examples/school.txt"
-                doc = store.ingest(source)["document"]
-                store.confirm(doc["id"], "tester", doc["revision"])
-                out = Path(tmp) / "ascii.json"
-                store.export(out, "ascii-experimental")
-                content = out.read_text(encoding="utf-8")
-                self.assertTrue(content.isascii())
-                self.assertFalse(json.loads(content)["transformation"]["translation"])
-                self.assertEqual(store.get(doc["id"])["effective"]["issuer"], "आदर्श विद्यालय, भोपाल")
-            finally:
-                store.close()

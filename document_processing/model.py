@@ -68,7 +68,7 @@ def request_json(body):
     encoded = json.dumps(body).encode()
     for attempt in range(3):
         request = urllib.request.Request("https://api.groq.com/openai/v1/chat/completions", data=encoded,
-            headers={"Authorization": "Bearer " + key, "Content-Type": "application/json", "User-Agent": "CircularLedger/0.1"})
+            headers={"Authorization": "Bearer " + key, "Content-Type": "application/json", "User-Agent": "MultilanguageDocumentProcessing/0.1"})
         try:
             with urllib.request.urlopen(request, timeout=45) as response:
                 payload = json.load(response)

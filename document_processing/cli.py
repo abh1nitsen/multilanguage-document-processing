@@ -18,7 +18,7 @@ def main(argv=None):
     p.add_argument("--provider", choices=["baseline", "groq"], default="baseline")
     p.add_argument("--model", default=DEFAULT_MODEL)
     p.add_argument("--ocr", choices=["auto", "always", "never"], default="auto")
-    for name in ["show", "retry", "recover", "confirm", "correct", "reopen", "judge", "reprocess"]:
+    for name in ["show", "retry", "recover", "confirm", "correct", "reopen", "judge", "reprocess", "translate"]:
         p = sub.add_parser(name); p.add_argument("id")
         if name in {"confirm", "correct", "reopen", "reprocess"}:
             p.add_argument("--revision", type=int, required=True)
@@ -35,10 +35,13 @@ def main(argv=None):
                            help="Assert that the original processing worker has stopped.")
         if name == "judge":
             p.add_argument("--model", default=DEFAULT_JUDGE_MODEL)
+            p.add_argument("--english", action="store_true", help="Review the English rendering against original source readings.")
         if name == "reprocess":
             p.add_argument("--refresh-reading", action="store_true")
+        if name == "translate":
+            p.add_argument("--model", default=DEFAULT_MODEL)
     p = sub.add_parser("export"); p.add_argument("path")
-    p.add_argument("--profile", choices=["original", "ascii-experimental"], default="original")
+    p.add_argument("--profile", choices=["original", "english-reviewed"], default="original")
     args = parser.parse_args(argv)
     store = Store(args.db)
     try:
@@ -49,8 +52,9 @@ def main(argv=None):
         elif args.command == "recover": result = store.recover(args.id)
         elif args.command == "confirm": result = store.confirm(args.id, args.reviewer, args.revision)
         elif args.command == "reopen": result = store.reopen(args.id, args.revision)
-        elif args.command == "judge": result = store.judge(args.id, args.model)
+        elif args.command == "judge": result = store.judge_english(args.id, args.model) if args.english else store.judge(args.id, args.model)
         elif args.command == "reprocess": result = store.reprocess(args.id, args.revision, args.refresh_reading)
+        elif args.command == "translate": result = store.translate(args.id, args.model)
         elif args.command == "correct":
             result = store.correct(args.id, args.field, None if args.clear else args.value,
                                    args.reason, args.reviewer, args.revision)

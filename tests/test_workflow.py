@@ -4,8 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from hindi_records.extract import extract, normalize_date
-from hindi_records.store import Store
+from document_processing.extract import extract, normalize_date
+from document_processing.store import Store
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLE = ROOT / "examples" / "school.txt"
@@ -98,10 +98,10 @@ class WorkflowTests(unittest.TestCase):
     def test_failed_ocr_retry_and_interruption(self):
         path = Path(self.tmp.name) / "input.png"
         path.write_bytes(b"fake")
-        with patch("hindi_records.store.read_source", side_effect=ValueError("OCR unavailable")):
+        with patch("document_processing.store.read_source", side_effect=ValueError("OCR unavailable")):
             doc = self.store.ingest(path)["document"]
         self.assertEqual(doc["state"], "failed")
-        with patch("hindi_records.store.read_source", return_value=([SAMPLE.read_text(encoding="utf-8")], {"reader": "fake"})):
+        with patch("document_processing.store.read_source", return_value=([SAMPLE.read_text(encoding="utf-8")], {"reader": "fake"})):
             doc = self.store.process(doc["id"])
         self.assertEqual(doc["state"], "needs_review")
         with self.store.conn:
@@ -111,7 +111,7 @@ class WorkflowTests(unittest.TestCase):
     def test_atomic_export_keeps_previous_file(self):
         out = Path(self.tmp.name) / "export.json"
         out.write_text("last valid output", encoding="utf-8")
-        with patch("hindi_records.store.os.replace", side_effect=OSError("Disk unavailable")):
+        with patch("document_processing.store.os.replace", side_effect=OSError("Disk unavailable")):
             with self.assertRaises(OSError):
                 self.store.export(out)
         self.assertEqual(out.read_text(encoding="utf-8"), "last valid output")

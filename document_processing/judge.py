@@ -5,7 +5,7 @@ import json
 from .extract import LABELS
 from .model import request_json
 
-VERSION = "evidence-judge-v2-dual-reading"
+VERSION = "evidence-judge-v3-translation-aware"
 DEFAULT_JUDGE_MODEL = "qwen/qwen3.8-27b"
 VERDICTS = ["supported", "unsupported", "uncertain", "missing"]
 
@@ -32,6 +32,8 @@ def assess(pages, values, language, model, alternate_pages=None):
             "Assess each field independently against the complete source. supported means the exact fact "
             "is supported in the correct role, including the circular's own date rather than a cited date. "
             "Check normalized dates semantically. unsupported means contradicted or invented. uncertain means "
+            "Proposed values may be reviewed English translations: check semantic faithfulness, especially "
+            "negation, obligations, names and numbers, rather than demanding a verbatim English quote. "
             "ambiguous, unreadable, or multiple plausible readings. missing means no proposed value. "
             "Compare primary and alternate text-layer readings when supplied. If they disagree, identify "
             "the conflict instead of treating the primary OCR as unquestionable truth. You cannot inspect "

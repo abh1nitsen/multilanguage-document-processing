@@ -6,7 +6,7 @@ Development environment: Windows, Python 3.12.10, Node 24.22.1. Initial developm
 
 The initial labelled baseline passed eight hand-authored text cases: school, municipal, scholarship, missing/invalid dates, duplicate labels, irrelevant prose, unsupported free-form notice and adversarial instructions. Initial results: 8/8 admission decisions, 26/26 non-null gold fields, 14/14 nulls and 29/29 evidence offsets. These small synthetic checks measure regression behavior only. A realistic free-form notice is deliberately rejected by the labelled baseline; this illustrates its limited coverage.
 
-The software suite passed 27 tests, including actual Streamlit source-confirmation and English-review form interactions, translation-button feedback and saved-result reuse without another provider call, persistence, byte duplicates, restart, correction history, stale edits, invalid dates, chronology, unsupported/empty inputs, OCR failure and retry, interrupted-job recovery, failed exports, model schema violations, ungrounded evidence, language configuration, judge caching/authority boundaries, and experimental reviewed-English export invariants.
+The software suite passed 34 tests, including actual Streamlit source-confirmation, English-review and full-text translation interactions, translation-button feedback and saved-result reuse without another provider call, exact source-section coverage, full-text restart/retry checkpoints, independent document ownership with shared translation caches, persistence, byte duplicates, correction history, stale edits, invalid dates, chronology, unsupported/empty inputs, OCR failure and retry, interrupted-job recovery, failed exports, model schema violations, ungrounded evidence, language configuration, judge caching/authority boundaries, and experimental reviewed-English export invariants.
 
 ## Actual circular development check
 
@@ -24,6 +24,8 @@ The updated dual-reading judge marked the issue date uncertain. A visual develop
 The current English translator (`openai/gpt-oss-120b`) produced English issuer, subject and required-action proposals for the same actual circular. The independent translation-aware judge (`qwen/qwen3.8-27b`) completed against original-language readings. Dates and the original reference stayed unchanged by the translator. A separate English review is required before export. This one adapted development case is not a translation-quality benchmark. The earlier Roman-script experiment has been replaced by English translation at the user's request.
 
 After a visual bilingual development review, one English rendering was confirmed with an explicit ASCII reference rendering. The English-only JSON contained one record and only ASCII characters; the original Hindi issuer and 2021-10-07 date remained intact. This validates the translation/review/storage integration, not production translation quality.
+
+A separate full-document translation call completed for the actual one-page circular, covering its heading, introductory paragraphs, numbered clauses, signature and web-admin recipient. It retained warnings for corrupted OCR dates, years and text. The saved output is explicitly unreviewed; it does not inherit the structured record's reviewed date or approval. TXT download was exercised in the running demo. The source text is kept beside the English page, and the full translation remains excluded from confirmed business exports.
 
 ## Current verification boundaries
 

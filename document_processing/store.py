@@ -15,6 +15,7 @@ from . import judge
 from .judge import DEFAULT_JUDGE_MODEL
 from .validation import crosscheck_readings
 from . import translate
+from . import full_text
 
 
 def dumps(value):
@@ -63,6 +64,11 @@ class Store:
           id INTEGER PRIMARY KEY, translation_id INTEGER NOT NULL REFERENCES english_translations(id),
           translation_revision INTEGER NOT NULL, model TEXT NOT NULL,
           report_json TEXT NOT NULL, created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS full_text_translations (
+          id INTEGER PRIMARY KEY, document_id TEXT NOT NULL REFERENCES documents(id),
+          identity TEXT NOT NULL UNIQUE, source_revision INTEGER NOT NULL,
+          language TEXT NOT NULL, model TEXT NOT NULL, version TEXT NOT NULL,
+          reading TEXT NOT NULL, pages_json TEXT NOT NULL, created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS corrections (
           id INTEGER PRIMARY KEY, document_id TEXT NOT NULL REFERENCES documents(id),
           field TEXT NOT NULL, value_json TEXT NOT NULL, reason TEXT NOT NULL,
@@ -284,6 +290,72 @@ class Store:
         item["proposal"] = json.loads(item.pop("proposal_json"))
         item["effective"] = json.loads(item.pop("effective_json"))
         return item
+
+    def full_english(self, doc_id, model=DEFAULT_MODEL, reading="primary"):
+        doc, pages, alternate, key = self._full_translation_input(doc_id, model, reading)
+        row = self.conn.execute("SELECT * FROM full_text_translations WHERE document_id=? AND identity=?",
+                                (doc_id, key)).fetchone()
+        if not row:
+            return None
+        result = dict(row)
+        result["pages"] = json.loads(result.pop("pages_json"))
+        result["review_state"] = "unreviewed"
+        return result
+
+    def _full_translation_input(self, doc_id, model, reading):
+        doc = self.get(doc_id)
+        if doc["state"] not in {"needs_review", "confirmed"} or not doc["pages"]:
+            raise ValueError("Read an admitted circular before requesting full-document translation.")
+        primary = doc["pages"]
+        secondary = (doc["reader"] or {}).get("alternate_text_pages", [])
+        if reading == "primary":
+            pages, alternate = primary, secondary
+        elif reading == "text_layer" and len(secondary) == len(primary):
+            pages, alternate = secondary, primary
+        else:
+            raise ValueError("The selected source reading is unavailable.")
+        key = full_text.identity([doc_id, full_text.document_key(
+            pages, alternate, doc["processing_options"]["language"], model, reading)])
+        return doc, pages, alternate, key
+
+    def translate_full_text(self, doc_id, model=DEFAULT_MODEL, reading="primary", progress=None):
+        doc, pages, alternate, key = self._full_translation_input(doc_id, model, reading)
+        prior = self.full_english(doc_id, model, reading)
+        if prior:
+            return prior
+        chunks = list(full_text.segments(pages))
+        results = {i: {"page": i, "source_text": p, "english_text": "", "warnings": [], "chunks": []}
+                   for i, p in enumerate(pages, 1)}
+        for index, chunk in enumerate(chunks, 1):
+            if progress:
+                progress(index - 1, len(chunks))
+            context = alternate[chunk["page"] - 1] if len(alternate) >= chunk["page"] else ""
+            chunk_key = full_text.identity([full_text.VERSION, chunk["text"], context,
+                doc["processing_options"]["language"], model])
+            cached = self.conn.execute("SELECT raw_json FROM model_cache WHERE cache_key=?", (chunk_key,)).fetchone()
+            if not chunk["text"].strip():
+                result = {"english_text": "", "warnings": []}
+            elif cached:
+                result = full_text.validate_result(json.loads(cached[0]), chunk["text"])
+            else:
+                result = full_text.translate_chunk(chunk["text"], context, doc["processing_options"]["language"], model)
+                with self.conn:
+                    self.conn.execute("INSERT OR IGNORE INTO model_cache VALUES (?,?,?)", (chunk_key, dumps(result), now()))
+            page = results[chunk["page"]]
+            page["english_text"] += ("\n\n" if page["english_text"] and result["english_text"] else "") + result["english_text"]
+            page["warnings"] = list(dict.fromkeys(page["warnings"] + result["warnings"]))
+            page["chunks"].append({"start": chunk["start"], "end": chunk["end"]})
+            if progress:
+                progress(index, len(chunks))
+        with self.conn:
+            self.conn.execute("""INSERT OR IGNORE INTO full_text_translations
+                (document_id,identity,source_revision,language,model,version,reading,pages_json,created_at)
+                VALUES (?,?,?,?,?,?,?,?,?)""", (doc_id, key, doc["revision"], doc["processing_options"]["language"],
+                model, full_text.VERSION, reading, dumps(list(results.values())), now()))
+        saved = self.full_english(doc_id, model, reading)
+        if saved is None:
+            raise ValueError("The source reading changed during translation. The completed translation was retained for its original reading; reload the document.")
+        return saved
 
     def translate(self, doc_id, model=DEFAULT_MODEL):
         doc = self.get(doc_id)

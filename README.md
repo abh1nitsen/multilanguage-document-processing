@@ -53,6 +53,12 @@ The launcher never copies keys into the repository. `.env.example` is a referenc
 
 If a translation already exists for the selected document revision and model, the action reads **Continue English review** or **Show saved English translation**. It reopens the saved result without a new model call and displays a confirmation. Reviewed English fields appear as readable text, with the full JSON record available in an expandable section.
 
+### Full-document translation
+
+Open **Full document English translation** to translate the entire saved text, not just the extracted fields. The explicit **Translate full document** action sends bounded text sections to Groq. Completed sections are cached immediately; retry after an interruption reuses those sections. The complete result is saved only after all sections succeed. Each source page is retained beside its English translation, with page selection and bounded reading panels, plus TXT and JSON downloads.
+
+This output is an **unreviewed full-text translation** and does not confirm business records or replace the reviewed English database export. It includes headings, numbered clauses, signatures and other text present in the saved reading. OCR errors and conflicting PDF readings remain review issues; alternate readings are supplied as supporting context where bounded. Numbers missing from the translated text trigger a local review warning, not an accuracy score. Reference identifiers may remain in their original script. The full-text TXT download includes its unreviewed status and review notes. A changed saved reading or model creates a separate translation identity; source-field corrections alone do not repeat a full-text call when the underlying reading is unchanged.
+
 For a completely offline text regression walkthrough, choose Hindi + baseline and upload `examples/school.txt`. These examples are authored synthetic tests, not production evidence.
 
 ## CLI
@@ -67,6 +73,7 @@ document-processing judge DOCUMENT_ID
 document-processing confirm DOCUMENT_ID --revision 2 --reviewer reviewer-name
 document-processing export data/exports/confirmed.json
 document-processing translate DOCUMENT_ID
+document-processing translate DOCUMENT_ID --full-text
 document-processing judge DOCUMENT_ID --english
 document-processing export data/exports/english.json --profile english-reviewed
 ```

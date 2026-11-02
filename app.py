@@ -11,6 +11,7 @@ from document_processing.languages import LANGUAGES
 from document_processing.model import DEFAULT_MODEL
 from document_processing.judge import DEFAULT_JUDGE_MODEL
 from document_processing.translate import TEXT_FIELDS
+from document_processing.full_text import as_text as full_translation_text
 from document_processing.store import Store, dumps
 
 st.set_page_config(page_title="Multilanguage Document Processing", page_icon="📄", layout="wide")
@@ -182,6 +183,60 @@ try:
     confirmed = [dict(r) for r in store.conn.execute("SELECT * FROM notices ORDER BY confirmed_at,document_id")]
     st.download_button("Download confirmed records · JSON", dumps({"schema_version": "1.0", "records": confirmed}),
                        file_name="confirmed-notices.json", mime="application/json")
+    with st.expander("Full document English translation"):
+        st.caption("Translate all saved page text, including headings, numbered points, signatures and footnotes. This is separate from translating the extracted fields and uses Groq only when requested.")
+        st.caption("Corrections to extracted fields do not change the saved source text. Check conflicting dates or identifiers against the original document.")
+        full_model = st.text_input("Full-document translation model", DEFAULT_MODEL)
+        readings = ["primary"]
+        if (doc["reader"] or {}).get("alternate_text_pages"):
+            readings.append("text_layer")
+        full_reading = st.selectbox("Text to translate", readings, format_func=lambda r:
+            "Main document reading (OCR when used)" if r == "primary" else "PDF text-layer reading")
+        eligible = doc["state"] in {"needs_review", "confirmed"} and bool(doc["pages"])
+        full_saved = store.full_english(selected, full_model, full_reading) if eligible else None
+        full_feedback = "full_translation_feedback_" + selected
+        if full_feedback in st.session_state:
+            st.success(st.session_state.pop(full_feedback))
+        if not eligible:
+            st.caption("A readable, admitted circular is required before full-document translation.")
+        if full_saved:
+            st.caption("A translation of this saved reading and model already exists. Opening it makes no new AI call.")
+        if st.button("Show saved full-document translation" if full_saved else "Translate full document", disabled=not eligible):
+            try:
+                meter = st.progress(0.0, text="Preparing full-document translation…")
+                with st.spinner("Opening saved text…" if full_saved else "Translating the whole document…"):
+                    store.translate_full_text(selected, full_model, full_reading,
+                        progress=lambda done, total: meter.progress(done / total,
+                            text=f"Translated {done} of {total} sections"))
+                meter.empty()
+                st.session_state[full_feedback] = "Saved full-document translation opened. No new AI call was made." if full_saved else "Full-document English translation is ready below. Check it against the source before relying on it."
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))
+        if full_saved:
+            st.subheader("Full-document English text")
+            st.warning("Unreviewed translation of the saved text reading. OCR errors and ambiguities can carry through. Original identifiers may retain their script.")
+            full_page = st.selectbox("Translation page", range(len(full_saved["pages"])),
+                format_func=lambda i: f"Page {i + 1}", key="full_page_" + str(full_saved["id"]))
+            page = full_saved["pages"][full_page]
+            source_column, english_column = st.columns(2)
+            with source_column:
+                st.markdown("**Source reading**")
+                with st.container(height=450):
+                    st.text(page["source_text"])
+            with english_column:
+                st.markdown("**English translation**")
+                with st.container(height=450):
+                    st.text(page["english_text"])
+            if page["warnings"]:
+                st.warning(f'{len(page["warnings"])} source-quality notes need review.')
+                with st.expander("Source-quality notes"):
+                    for warning in page["warnings"]:
+                        st.text("• " + warning)
+            st.download_button("Download full English text · TXT", full_translation_text(full_saved),
+                file_name=Path(doc["source_name"]).stem + "-english-full.txt", mime="text/plain")
+            st.download_button("Download full translation with source pages · JSON", dumps(full_saved),
+                file_name=Path(doc["source_name"]).stem + "-english-full.json", mime="application/json")
     with st.expander("Experimental English translation and export"):
         st.caption("Translate confirmed text into English using an explicit Groq call. Originals remain unchanged. Review meaning and identifier renderings before English-only export.")
         feedback_key = "translation_feedback_" + selected

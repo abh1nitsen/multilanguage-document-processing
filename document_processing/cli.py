@@ -40,6 +40,8 @@ def main(argv=None):
             p.add_argument("--refresh-reading", action="store_true")
         if name == "translate":
             p.add_argument("--model", default=DEFAULT_MODEL)
+            p.add_argument("--full-text", action="store_true", help="Translate all saved page text instead of extracted fields.")
+            p.add_argument("--reading", choices=["primary", "text_layer"], default="primary")
     p = sub.add_parser("export"); p.add_argument("path")
     p.add_argument("--profile", choices=["original", "english-reviewed"], default="original")
     args = parser.parse_args(argv)
@@ -54,7 +56,7 @@ def main(argv=None):
         elif args.command == "reopen": result = store.reopen(args.id, args.revision)
         elif args.command == "judge": result = store.judge_english(args.id, args.model) if args.english else store.judge(args.id, args.model)
         elif args.command == "reprocess": result = store.reprocess(args.id, args.revision, args.refresh_reading)
-        elif args.command == "translate": result = store.translate(args.id, args.model)
+        elif args.command == "translate": result = store.translate_full_text(args.id, args.model, args.reading) if args.full_text else store.translate(args.id, args.model)
         elif args.command == "correct":
             result = store.correct(args.id, args.field, None if args.clear else args.value,
                                    args.reason, args.reviewer, args.revision)

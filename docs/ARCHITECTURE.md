@@ -9,12 +9,15 @@
 | `validation.py` | Compare OCR and PDF text-layer readings for dates/references | None |
 | `judge.py` | Independent advisory review contract and verdict validation | Explicit judge calls |
 | `translate.py` | Experimental English proposal, source invariants and ASCII review rules | Explicit translation calls |
+| `full_text.py` | Complete page-text translation, bounded segmentation, numeral checks and text download formatting | Explicit full-text translation calls |
 | `store.py` | SQLite source of truth, jobs, checkpoints, caches, revisions and export | Orchestrates explicit adapters |
 | `cli.py`, `app.py` | Command-line and local visual review workflows | Through service methods only |
 
 The parser returns page strings plus reader metadata. Primary and alternate text-layer readings remain distinct. Model candidates contain a raw quotation, page number, and reading identity. The grounding step checks exact source presence and computes offsets itself. Deterministic normalization never alters the raw proposal. Human corrections are append-only and override proposals. Confirmation is a separate transactional action. A judge report is not a correction or approval.
 
 Current schema is the common circular contract; the target connector can map it to an existing DB schema later. New fields require a versioned contract, corresponding storage migration, annotations, and evaluation. English translation is a separate optional stage after original-language confirmation. `english_translations` keeps immutable proposals and reviewed values linked to the source revision. `translation_judge_reports` retains advisory assessments of each translation snapshot. Changing the source invalidates prior English export eligibility. The reviewer explicitly handles non-ASCII identifiers; the model does not rewrite them.
+
+Whole-document translations are separate from structured-field translations. `full_text_translations` stores source page snapshots, translated pages, warnings and exact source-section ranges. Identity includes both readings, language, model and prompt/segmentation version. Sections are at most 6,000 characters; every source character belongs to one section, but this deterministic coverage does not prove semantic translation completeness. Successful section responses use the durable model cache, enabling retry after a later section fails. Aggregate translations are written atomically only after all sections succeed, retaining older completed results. Full-document translations are explicitly unreviewed and never enter confirmed business exports.
 
 ## Persistence and failure behavior
 

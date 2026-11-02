@@ -10,6 +10,26 @@ from document_processing.store import Store
 
 @unittest.skipUnless(importlib.util.find_spec("streamlit"), "optional demo is not installed")
 class DemoTests(unittest.TestCase):
+    def test_full_document_translation_is_visible_and_downloadable(self):
+        from streamlit.testing.v1 import AppTest
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "full-demo.sqlite"
+            store = Store(db)
+            store.ingest(root / "examples/school.txt")
+            store.close()
+            with patch.dict(os.environ, {"CIRCULAR_DB": str(db)}), patch(
+                    "document_processing.full_text.translate_chunk", return_value={
+                        "english_text": "Full notice, including the parent meeting and the signature.", "warnings": []}) as provider:
+                at = AppTest.from_file(str(root / "app.py")).run(timeout=30)
+                next(w for w in at.button if w.label == "Translate full document").click().run(timeout=30)
+                self.assertFalse(at.exception)
+                self.assertTrue(any("Full-document English translation is ready below" in w.value for w in at.success))
+                self.assertTrue(any("Full notice, including" in w.value for w in at.text))
+                next(w for w in at.button if w.label == "Show saved full-document translation").click().run(timeout=30)
+                self.assertFalse(at.exception)
+                self.assertEqual(provider.call_count, 1)
+
     def test_translation_button_reports_new_and_saved_results(self):
         from streamlit.testing.v1 import AppTest
         root = Path(__file__).resolve().parents[1]
